@@ -1,0 +1,336 @@
+#coding=utf-8
+import re
+import os
+import xlwt
+import xlrd
+from xlutils.copy import copy
+
+
+def GetHtml(url_html):
+    global res_name
+    # 以只读的方式打开本地html文件
+    htmltxt = open(url_html, 'r',encoding='UTF-8')
+    htmlpage = htmltxt.read()
+    # 正则应用系统名称
+    a = '<th width="120">任务名称</th>.*?<td>'
+    b ='</td>'
+    name = re.compile( a +'(.*?)'+ b ,re.S|re.M)
+    res_name = name.findall(htmlpage)
+    #正则高风险的漏洞名称
+    a_0 = "<img align='absmiddle' src='reportfiles/images/vuln_high.gif' ></img>.*?<span style='color:#E42B00'>"
+    b_0 = "</span>"
+    targe_high = re.compile(a_0+'(.*?)'+b_0,re.S|re.M)
+    res_targe_high = targe_high.findall(htmlpage)
+    # 正则中风险的漏洞名称
+    a_1 = "<img align='absmiddle' src='reportfiles/images/vuln_middle.gif' ></img>.*?<span style='color:#AF6100'>"
+    b_1 = "</span>"
+    targe_medium = re.compile(a_1 + '(.*?)' + b_1, re.S | re.M)
+    res_targe_medium = targe_medium.findall(htmlpage)
+    # 正则低风险的漏洞名称
+    a_2 = "<img align='absmiddle' src='reportfiles/images/vuln_low.gif' ></img>.*?<span style='color:#737373'>"
+    b_2 = "</span>"
+    targe_low = re.compile(a_2 + '(.*?)' + b_2, re.S | re.M)
+    res_targe_low = targe_low.findall(htmlpage)
+    #正则影响ip
+    a_3 = '<th width="20%">受影响主机</th>.*?<td width="80%"><a href="host/'
+    b_3 = '.html"'
+    ip = re.compile(a_3 + '(.*?)' + b_3, re.S | re.M)
+    res_ip = ip.findall(htmlpage)
+    #正则整改建议
+    a_4 = '<tr class="odd">.*?<th>解决办法</th>.*?<td>'
+    b_4 = '</td>'
+    method = re.compile(a_4 + '(.*?)' + b_4, re.S | re.M)
+    res_method = method.findall(htmlpage)
+    # 正则漏洞描述
+    a_5 = '<tr class="even">.*?<th>详细描述</th>.*?<td>'
+    b_5 = '</td>'
+    describe = re.compile(a_5 + '(.*?)' + b_5, re.S | re.M)
+    res_describe = describe.findall(htmlpage)
+    # 正则cve编号
+    """
+    a_6 = 'name='
+    b_6 = '">CVE-'
+    cve = re.compile(a_6 + '(.*?)' + b_6, re.S | re.M)
+    res_cve = cve.findall(htmlpage)
+    """
+    book = xlwt.Workbook(encoding='utf-8')  # 创建工作簿
+    sheet = book.add_sheet('test',cell_overwrite_ok=False)  # 创建工作表格
+    global style0
+    global style1
+    #style = xlwt.easyxf('borders:left thin,left_colour 0x40,right thin,right_colour 0x40,top thin,top_colour 0x40,bottom thin,bottom_colour 0x40;alignment:horz center,vert center;')
+    style0 = xlwt.easyxf('borders:left thin,left_colour 0x40,right thin,right_colour 0x40,top thin,top_colour 0x40,bottom thin,bottom_colour 0x40;alignment: horz center,vert center;font: name 宋体, color-index black,bold on,height 280;pattern: pattern solid, fore_colour dark_green_ega;align: wrap on; ')
+    style1 = xlwt.easyxf('borders:left thin,left_colour 0x40,right thin,right_colour 0x40,top thin,top_colour 0x40,bottom thin,bottom_colour 0x40;alignment:horz center,vert center;align: wrap on;')#自动换行
+    sheet.write(0, 0, '序号',style0)
+    sheet.write(0, 1, '系统名称',style0)
+    sheet.write(0, 2, '系统类别', style0)
+    sheet.write(0, 3, '漏洞名称',style0)
+    sheet.write(0, 4, '漏洞级别',style0)
+    sheet.write(0, 5, '漏洞类别', style0)
+    sheet.write(0, 6, '漏洞描述', style0)
+    sheet.write(0, 7, '影响ip/站点', style0)
+    sheet.write(0, 8, '测评项目', style0)
+    sheet.write(0, 9, '整改建议', style0)
+    sheet.write(0, 10, '整改技术要点', style0)
+    sheet.write(0, 11, '整改责任处室', style0)
+    sheet.write(0, 12, '整改责任人', style0)
+    sheet.write(0, 13, '运维处室', style0)
+    sheet.write(0, 14, '运维责任人', style0)
+    sheet.write(0, 15, '开发处室', style0)
+    sheet.write(0, 16, '开发责任人', style0)
+    sheet.write(0, 17, '是否整改', style0)
+    sheet.write(0, 18, '是否已完成整改', style0)
+    sheet.write(0, 19, '是否已复测', style0)
+    sheet.write(0, 20, '整改时限', style0)
+    sheet.write(0, 21, '整改方式', style0)
+    sheet.write(0, 22, '整改措施', style0)
+    sheet.write(0, 23, '未确定\不能整改原因', style0)
+    sheet.write(0, 24, '备注', style0)
+
+    """
+    本部分主要是输出漏洞名称，顺便输出序号，系统名称和漏洞等级。
+    待优化--------------------------------------------------
+
+    """
+    i = 0
+    for res in res_targe_high:
+        i += 1
+        sheet.col(i).width = 120 * 30 #从第二行开始的宽和高
+        sheet.col(i).high = 120 * 30  # 从第二行开始的宽和高
+        sheet.write(i, 0, i,style1)   #输出序号
+        sheet.write(i, 1, res_name[0],style1)  #输出系统名称
+        sheet.write(i, 3, res,style1)   #输出漏洞名称
+        sheet.write(i, 4, '高',style1)   #输出漏洞等级
+    for rew in res_targe_medium:
+        i += 1
+        sheet.col(i).width = 120 * 30
+        sheet.write(i, 0, i,style1)
+        sheet.write(i, 1, res_name[0],style1)
+        sheet.write(i, 3, res , style1)
+        sheet.write(i, 4, '中', style1)
+    for res in res_targe_low:
+        i += 1
+        sheet.col(i).width = 120 * 30
+        sheet.write(i, 0, i,style1)
+        sheet.write(i, 1, res_name[0],style1)
+        sheet.write(i, 3, res,style1)
+        sheet.write(i, 4, '低',style1)
+    """
+    本部分主要是输出漏洞ip。
+    --------------------------------------------------
+    
+    j = 0
+    for res in res_ip:
+        j += 1
+        sheet.write(j, 5, res,style1)
+    """
+    """
+    本部分主要是输出漏洞整改建议。
+    --------------------------------------------------
+    """
+    k = 0
+    for res in res_method:
+        k += 1
+        sheet.write(k, 10, res,style1)
+    """
+    本部分主要是输出漏洞描述。
+    --------------------------------------------------
+    """
+    h = 0
+    for res in res_describe:
+        h += 1
+        sheet.write(h, 6, res,style1)
+    """
+    本部分主要是输出cve。
+    --------------------------------------------------
+    """
+    """
+    f = 0
+    for res in res_cve:
+        f += 1
+        sheet.write(f, 8, res)
+    """
+    #book.save(res_name[0] +'.xls')  # 保存到test表格中
+    book.save('old.xls')
+
+def GetXls(url_xls):
+
+    workbook = xlrd.open_workbook(url_xls)
+    # 根据sheet索引或者名称获取sheet内容
+    sheet = workbook.sheet_by_name('漏洞信息')
+    # sheet的名称，行数，列数
+    #print(sheet.name, sheet.nrows, sheet.ncols)
+    nrows = sheet.nrows
+    # 获取整列的值（数组）
+    cols_5 = sheet.col_values(5)  # 获取第三列内容
+    cols_10 = sheet.col_values(10)  # 获取第三列内容
+    cols_12 = sheet.col_values(12)  # 获取第三列内容
+    #print(cols_5,cols_10,cols_12)
+    rb = xlrd.open_workbook('old.xls',formatting_info=True)
+    wb = copy(rb)
+    cr = wb.get_sheet(0)
+    i = 2
+    h = 2
+    k = 2
+    while(i < nrows):
+        cr.write(i-1,5,cols_5[i],style1)
+        #print(cols_5[i])
+        i += 1
+
+    while (h < nrows):
+        cr.write(h - 1, 7, cols_10[h], style1)
+        h += 1
+
+    #CVEID
+    """
+    while (k < nrows):
+        cr.write(k - 1, 4, cols_12[k], style1)
+        # print(cols_5[i])
+        k += 1
+    """
+    os.remove('old.xls')
+    wb.save('test_1.xls')
+
+# test表补充整改处室和负责人
+def FindInfor():
+    #读取xls文件，获取工作簿，只读模式，只能获取数据不能进行写入和修改
+    wk_test = xlrd.open_workbook("test_1.xls", formatting_info=True)
+    wk_message = xlrd.open_workbook("message.xls", formatting_info=True)
+    #获取工作簿中的sheet
+    sheet_test = wk_test.sheets()[0]
+    sheet_message = wk_message.sheets()[0]
+    #获取sheet中的行数
+    nrows_test = sheet_test.nrows
+    nrows_message = sheet_message.nrows
+    # copy工作簿以后才可以写入，方便后期进行写入
+    wk_test_copy = copy(wk_test)
+    a = wk_test_copy.get_sheet(0)
+    for i in range(1,nrows_test):
+        A = str(sheet_test.cell(i, 1).value)  # 获取test表姓名列的各行数据
+        row_a = sheet_test.row_values(i)
+        #print(A)
+        for j in range(1,nrows_message):
+            B = str(sheet_message.cell(j, 0).value)  # 获取message表姓名列的各行数据
+            #print(B)
+            # 匹配信息
+            if A == B:
+                row_j = sheet_message.row_values(j)#从第二列开始到第六列
+                #print(row_j)
+                a.write(i, 2, row_j[12])
+                if row_a[5] == 'OpenSSH' or row_a[5] ==  'RPC' or row_a[5] == 'Windows SMB' or row_a[5] == 'HP SMH' or row_a[5] == 'Snmpd' or row_a[5] == 'Terminal Server' or row_a[5] == 'NTP' or row_a[5] == 'Windows补丁':
+                    a.write(i, 12, "灾备处")
+                    a.write(i, 13, "王维沂")
+                else:
+                    a.write(i, 12, row_j[5])
+                    a.write(i, 13, row_j[6])
+                k = 1
+                m = 14
+                for l in range(5,10):
+                    #print(v)
+                    if l != 7:
+                        a.write(i,m,row_j[l])
+                        k += 1
+                        m += 1
+
+    wk_test_copy.save('test_2.xls')
+
+#根据负责整改处室分sheet,并生成test表
+def GetSheet():
+
+    workbook = xlrd.open_workbook('test_2.xls')
+    # 根据sheet索引或者名称获取sheet内容
+    sheet = workbook.sheet_by_index(0)
+    #sheet = workbook.sheet_by_name('test')
+    # sheet的名称，行数，列数
+    # print(sheet.name, sheet.nrows, sheet.ncols)
+    nrows = sheet.nrows
+    # 获取整行、列的值（数组）
+    row_0 = sheet.row_values(0)
+    cols_11 = sheet.col_values(11)
+    #cols_2 = list(set(cols_2))
+    #print(cols_2)
+    #print(row_0)
+    rb = xlrd.open_workbook('test_2.xls', formatting_info=True)
+    wb = copy(rb)
+    for v in list(set(cols_11)):
+        if v != '整改责任处室':
+            a = wb.add_sheet(v, cell_overwrite_ok=True)  # 创建工作表格
+            for i in range(0,25):
+                a.write(0,i,row_0[i])
+            h = 1
+            while (True):
+                row_h = sheet.row_values(h)
+                if cols_11[h] == v:
+                    for i in range(0, 25):
+                        a.write(h, i, row_h[i])
+                h += 1
+                if h > (nrows-1):
+                    break
+    #os.remove(url_xls)
+    wb.save( 'test_3.xls')
+
+#处理test表的格式，并生成新表new
+def CleanXls():
+    style0 = xlwt.easyxf('borders:left thin,left_colour 0x40,right thin,right_colour 0x40,top thin,top_colour 0x40,bottom thin,bottom_colour 0x40;alignment: horz center,vert center;align: wrap on; ')
+    workbook = xlrd.open_workbook("test_3.xls",formatting_info=True)
+    nums = len(workbook.sheets())
+    rows_sun = []
+    for i in range(nums):
+        sheet = workbook.sheets()[i]
+        nrows = sheet.nrows  # 获取行数
+        #ncols = sheet.ncols  # 获取列数
+        rows_get = []  # 定义空list
+
+        # 循环行
+        for i in range(nrows):
+            A = str(sheet.cell(i, 0).value)  # 获取第一列的各行数据
+            try:
+                # 剔除空行
+                if A[0:2] == '':
+                    pass
+                else:
+                    rows_get.append(i)
+            except:
+                continue
+        rows_sun.append(rows_get)
+    #print(rows_sun)
+        # 已经得到我们所需数据的行标数
+    #新建工作簿
+    wk = xlwt.Workbook(encoding='utf-8')
+
+    o = 0
+    for i in workbook.sheet_names():
+        #print(i)
+        sheet = workbook.sheet_by_name(i)
+        ncols = sheet.ncols
+        # 新建sheet
+        sheet_w = wk.add_sheet(i)
+        #定义初始变量
+        rows_new = rows_sun[o]
+        #循环rows_get
+        #print(len(rows_sun))
+        k = 0
+        wx = 0
+        for x in rows_new:
+            for y in range(ncols):
+
+                sheet_w.write(wx,y,sheet.cell(x,y).value,style0)  #wx,y 是写入sheet的行列标，sheet1.cell(x,y).value是原表我们需要的数据
+            wx = wx + 1  #行数加一，使得写入的sheet 行连续
+            k += 1
+        o += 1
+    #保存工作簿
+    wk.save('new.xls')
+
+
+if __name__ == '__main__':
+    url_html = input("请将要进行程度整理的html文件拖到cmd中：")
+    url_xls = input("请将要进行整理的xls文件拖到cmd中：")
+    #url = r'C:\Users\smile\Desktop\1\zhuji\index.html'
+    while len(url_html) < 1 :
+        url = input("警告：请按要求将要进行整理的html文件拖到cmd中:")
+    while len(url_xls) < 1:
+        url = input("警告：请按要求将要进行整理的xls文件拖到cmd中:")
+    GetHtml(url_html)
+    GetXls(url_xls)
+    FindInfor()
+    GetSheet()
+    CleanXls()
